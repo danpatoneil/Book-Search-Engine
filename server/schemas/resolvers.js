@@ -12,17 +12,21 @@
 //saveBook updates the loggedInUser's savedBooks list to include the given bookId
 //deleteBook updates the loggedInUser's savedBooks list to remove the given bookId
 const { User } = require("../models");
-const { signToken } = require("../utils/auth");
+const { signToken, AuthenticationError } = require("../utils/auth");
 
 const resolvers = {
   //resolvers that simply return an object without any changes are queries.
   Query: {
     //the brackets destructure the inputs. Neither are required, so it will
     me: async (parent, args, context) => {
-      const user = await User.findOne({
-        username: context.body.variables.username,
-      });
-      return user;
+      if (context.user) {
+        const user = await User.findOne({
+          _id: context.user._id,
+        });
+        return user;
+      } else {
+        throw AuthenticationError;
+      }
     },
   },
   Mutation: {
@@ -34,7 +38,7 @@ const resolvers = {
       if (!correctPassword) throw new Error("This password is incorrect");
       const token = signToken(user);
       //return an Auth
-      return token;
+      return { token, user };
     },
 
     addUser: async (parent, { username, email, password }) => {
@@ -49,24 +53,34 @@ const resolvers = {
         );
       const token = signToken(user);
       //returns an Auth type
-      return token;
+      return { token, user };
     },
     saveBook: async (parent, { input }, context) => {
-      const user = await User.findOne({
-        username: context.body.variables.username,
-      });
-      user.savedBooks.push(input);
-      await user.save();
-      return user;
+      if (context.user) {
+        const user = await User.findOne({
+          _id: context.user._id,
+        });
+        user.savedBooks.push(input);
+        await user.save();
+        return user;
+      } else {
+        throw AuthenticationError;
+      }
     },
 
-    removeBook: async (parent, {bookId}, context) => {
-      const user = await User.findOne({
-        username: context.body.variables.username,
-      });
-      user.savedBooks = user.savedBooks.filter(book => book.bookId !== bookId);
-      await user.save();
-      return user;
+    removeBook: async (parent, { bookId }, context) => {
+      if (context.user) {
+        const user = await User.findOne({
+          _id: context.user._id,
+        });
+        user.savedBooks = user.savedBooks.filter(
+          (book) => book.bookId !== bookId
+        );
+        await user.save();
+        return user;
+      } else {
+        throw AuthenticationError;
+      }
     },
   },
 };
